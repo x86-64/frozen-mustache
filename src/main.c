@@ -46,7 +46,7 @@ typedef struct mustache_ctx {
 	request_t             *request;
 	data_t                *output;
 	
-	mustache_token_section_t *section;
+	mustache_template_t   *section;
 	
 	uintmax_t              error_lineno;
 	char                  *error_msg;
@@ -54,9 +54,14 @@ typedef struct mustache_ctx {
 
 typedef struct token_userdata {
 	hashkey_t              key;
+	machine_t             *enum_shop;
 } token_userdata;
 
-static ssize_t mustache_frozen_iter(request_t *request, mustache_ctx *ctx){ // {{{
+static machine_t c_mustache_sect_proto;
+
+static ssize_t mustache_frozen_sect_handler(machine_t *machine, request_t *request){ // {{{
+	mustache_ctx          *ctx               = (mustache_ctx *)machine->userdata;
+	
 	request_t r_next[] = {
 		hash_inline(request),
 		hash_inline(ctx->request),
@@ -64,10 +69,10 @@ static ssize_t mustache_frozen_iter(request_t *request, mustache_ctx *ctx){ // {
 	};
 	mustache_ctx new_ctx = { ctx->api, r_next, ctx->output };
 	
-	if(mustache_render(ctx->api, &new_ctx, ctx->section->section) == 0)
+	if(mustache_render(ctx->api, &new_ctx, ctx->section) == 0)
 		return error("mustache section render failed");
 	
-	return ITER_OK;
+	return 0;
 } // }}}
 
 static uintmax_t mustache_frozen_read   (mustache_api_t *api, mustache_userdata *userdata, char *buffer, uintmax_t buffer_size){ // {{{
@@ -98,18 +103,19 @@ static uintmax_t mustache_frozen_varget (mustache_api_t *api, mustache_ctx *ctx,
 } // }}}
 static uintmax_t mustache_frozen_sectget(mustache_api_t *api, mustache_ctx *ctx, mustache_token_section_t  *token){ // {{{
 	data_t                *data;
-	request_t             *old_request;
+	token_userdata        *token_data    = (token_userdata *)token->userdata;
 	
-	if( (data = hash_data_find(ctx->request, ((token_userdata *)token->userdata)->key)) == NULL){
+	if( (data = hash_data_find(ctx->request, token_data->key)) == NULL){
 		if(token->inverted == 1){
 			return mustache_render(api, ctx, token->section);
 		}
 		return MUSTACHE_ERR;
 	}
 	
-	ctx->section = token;
+	ctx->section                    = token->section;
+	token_data->enum_shop->userdata = ctx;
 	
-	fastcall_enum r_enum = { { 4, ACTION_ENUM }, (f_callback)&mustache_frozen_iter, ctx };
+	fastcall_enum r_enum = { { 4, ACTION_ENUM }, token_data->enum_shop };
 	if(data_query(data, &r_enum) < 0)
 		return MUSTACHE_ERR;
 	
@@ -119,7 +125,9 @@ static void      mustache_frozen_error  (mustache_api_t *api, mustache_ctx *ctx,
 	ctx->error_lineno = lineno;
 	ctx->error_msg    = strdup(error);
 } // }}}
-static void      mustache_frozen_freedata (mustache_api_t *api, void *userdata){ // {{{
+static void      mustache_frozen_freedata (mustache_api_t *api, token_userdata *userdata){ // {{{
+	if(userdata->enum_shop)
+		free(userdata->enum_shop);	
 	free(userdata);
 } // }}}
 
@@ -135,11 +143,13 @@ uintmax_t mustache_frozen_prevarget (mustache_api_t *api, mustache_ctx *ctx, mus
 	if( (token->userdata = malloc(sizeof(token_userdata))) == NULL)
 		return MUSTACHE_ERR;
 	
-	((token_userdata *)token->userdata)->key = hashkey;
+	((token_userdata *)token->userdata)->key       = hashkey;
+	((token_userdata *)token->userdata)->enum_shop = NULL;
 	return MUSTACHE_OK;
 } // }}}
 uintmax_t mustache_frozen_presectget(mustache_api_t *api, mustache_ctx *ctx, mustache_token_section_t  *token){ // {{{
 	hashkey_t              hashkey;
+	machine_t             *enum_shop;
 	data_t                 hashkey_str       = DATA_STRING(token->name);
 	data_t                 hashkey_d         = DATA_PTR_HASHKEYT(&hashkey);
 	
@@ -150,7 +160,14 @@ uintmax_t mustache_frozen_presectget(mustache_api_t *api, mustache_ctx *ctx, mus
 	if( (token->userdata = malloc(sizeof(token_userdata))) == NULL)
 		return MUSTACHE_ERR;
 	
-	((token_userdata *)token->userdata)->key = hashkey;
+	if( (enum_shop = malloc(sizeof(machine_t))) == NULL){
+		free(token->userdata);
+		return MUSTACHE_ERR;
+	}
+	memcpy(enum_shop, &c_mustache_sect_proto, sizeof(machine_t));
+	
+	((token_userdata *)token->userdata)->key       = hashkey;
+	((token_userdata *)token->userdata)->enum_shop = enum_shop;
 	
 	if( (mustache_prerender(api, ctx, token->section)) == 0)
 		return MUSTACHE_ERR;
@@ -235,6 +252,13 @@ static machine_t c_mustache_proto = {
 	.func_destroy   = &mustache_destroy,
 	.machine_type_hash = {
 		.func_handler = &mustache_handler
+	}
+};
+
+static machine_t c_mustache_sect_proto = {
+	.supported_api  = API_HASH,
+	.machine_type_hash = {
+		.func_handler = &mustache_frozen_sect_handler
 	}
 };
 
