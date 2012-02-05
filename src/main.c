@@ -31,6 +31,9 @@
 #define EMODULE 103
 
 #define HK_VALUE_template 21633 // TODO replace this with HDK
+#define MUSTACHE_ERR 0
+#define MUSTACHE_OK  1
+#define ITER_OK 0
 
 typedef struct mustache_userdata {
 	mustache_template_t   *template;
@@ -39,10 +42,11 @@ typedef struct mustache_userdata {
 } mustache_userdata;
 
 typedef struct mustache_ctx {
-	machine_t             *machine;
+	mustache_api_t        *api;
 	request_t             *request;
-	mustache_userdata     *userdata;
 	data_t                *output;
+	
+	mustache_token_section_t *section;
 	
 	uintmax_t              error_lineno;
 	char                  *error_msg;
@@ -52,40 +56,70 @@ typedef struct token_userdata {
 	hashkey_t              key;
 } token_userdata;
 
-uintmax_t mustache_frozen_read   (mustache_api_t *api, mustache_userdata *userdata, char *buffer, uintmax_t buffer_size){ // {{{
+static ssize_t mustache_frozen_iter(request_t *request, mustache_ctx *ctx){ // {{{
+	request_t r_next[] = {
+		hash_inline(request),
+		hash_inline(ctx->request),
+		hash_end
+	};
+	mustache_ctx new_ctx = { ctx->api, r_next, ctx->output };
+	
+	if(mustache_render(ctx->api, &new_ctx, ctx->section->section) == 0)
+		return error("mustache section render failed");
+	
+	return ITER_OK;
+} // }}}
+
+static uintmax_t mustache_frozen_read   (mustache_api_t *api, mustache_userdata *userdata, char *buffer, uintmax_t buffer_size){ // {{{
 	fastcall_read r_read = { { 5, ACTION_READ }, 0, buffer, buffer_size };
 	if( data_query(userdata->tpl_data, &r_read) < 0 )
-		return 0;
+		return MUSTACHE_ERR;
 	
 	return r_read.buffer_size;
 } // }}}
-uintmax_t mustache_frozen_write  (mustache_api_t *api, mustache_ctx *ctx, char *buffer, uintmax_t buffer_size){ // {{{
+static uintmax_t mustache_frozen_write  (mustache_api_t *api, mustache_ctx *ctx, char *buffer, uintmax_t buffer_size){ // {{{
 	fastcall_write r_write = { { 5, ACTION_WRITE }, 0, buffer, buffer_size };
 	if( data_query(ctx->output, &r_write) < 0 )
-		return 0;
+		return MUSTACHE_ERR;
 	
 	return r_write.buffer_size;
 } // }}}
-uintmax_t mustache_frozen_varget (mustache_api_t *api, mustache_ctx *ctx, mustache_token_variable_t *token){ // {{{
+static uintmax_t mustache_frozen_varget (mustache_api_t *api, mustache_ctx *ctx, mustache_token_variable_t *token){ // {{{
 	data_t                *data;
 	
 	if( (data = hash_data_find(ctx->request, ((token_userdata *)token->userdata)->key)) == NULL)
-		return 0;
+		return MUSTACHE_ERR;
 	
 	fastcall_transfer r_transfer = { { 4, ACTION_TRANSFER }, ctx->output };
 	if(data_query(data, &r_transfer) < 0)
-		return 0;
+		return MUSTACHE_ERR;
 	
 	return r_transfer.transfered;
 } // }}}
-uintmax_t mustache_frozen_sectget(mustache_api_t *api, mustache_ctx *ctx, mustache_token_section_t  *token){ // {{{
-	return 1;
+static uintmax_t mustache_frozen_sectget(mustache_api_t *api, mustache_ctx *ctx, mustache_token_section_t  *token){ // {{{
+	data_t                *data;
+	request_t             *old_request;
+	
+	if( (data = hash_data_find(ctx->request, ((token_userdata *)token->userdata)->key)) == NULL){
+		if(token->inverted == 1){
+			return mustache_render(api, ctx, token->section);
+		}
+		return MUSTACHE_ERR;
+	}
+	
+	ctx->section = token;
+	
+	fastcall_enum r_enum = { { 4, ACTION_ENUM }, (f_callback)&mustache_frozen_iter, ctx };
+	if(data_query(data, &r_enum) < 0)
+		return MUSTACHE_ERR;
+	
+	return MUSTACHE_OK;
 } // }}}
-void      mustache_frozen_error  (mustache_api_t *api, mustache_ctx *ctx, uintmax_t lineno, char *error){ // {{{
+static void      mustache_frozen_error  (mustache_api_t *api, mustache_ctx *ctx, uintmax_t lineno, char *error){ // {{{
 	ctx->error_lineno = lineno;
 	ctx->error_msg    = strdup(error);
 } // }}}
-void      mustache_frozen_freedata (mustache_api_t *api, void *userdata){ // {{{
+static void      mustache_frozen_freedata (mustache_api_t *api, void *userdata){ // {{{
 	free(userdata);
 } // }}}
 
@@ -96,16 +130,32 @@ uintmax_t mustache_frozen_prevarget (mustache_api_t *api, mustache_ctx *ctx, mus
 	
 	fastcall_convert_from r_convert = { { 4, ACTION_CONVERT_FROM }, &hashkey_str, FORMAT(config) };
 	if(data_query(&hashkey_d, &r_convert) < 0)
-		return 0;
+		return MUSTACHE_ERR;
 	
 	if( (token->userdata = malloc(sizeof(token_userdata))) == NULL)
-		return 0;
+		return MUSTACHE_ERR;
 	
 	((token_userdata *)token->userdata)->key = hashkey;
-	return 1;
+	return MUSTACHE_OK;
 } // }}}
 uintmax_t mustache_frozen_presectget(mustache_api_t *api, mustache_ctx *ctx, mustache_token_section_t  *token){ // {{{
-	return 1;
+	hashkey_t              hashkey;
+	data_t                 hashkey_str       = DATA_STRING(token->name);
+	data_t                 hashkey_d         = DATA_PTR_HASHKEYT(&hashkey);
+	
+	fastcall_convert_from r_convert = { { 4, ACTION_CONVERT_FROM }, &hashkey_str, FORMAT(config) };
+	if(data_query(&hashkey_d, &r_convert) < 0)
+		return MUSTACHE_ERR;
+	
+	if( (token->userdata = malloc(sizeof(token_userdata))) == NULL)
+		return MUSTACHE_ERR;
+	
+	((token_userdata *)token->userdata)->key = hashkey;
+	
+	if( (mustache_prerender(api, ctx, token->section)) == 0)
+		return MUSTACHE_ERR;
+		
+	return MUSTACHE_OK;
 } // }}}
 
 mustache_api_t mustache_api = {
@@ -124,7 +174,7 @@ static int mustache_init(machine_t *machine){ // {{{
 		return error("calloc failed");
 	
 	userdata->output = HK(output);
-	return 0;
+	return MUSTACHE_ERR;
 } // }}}
 static int mustache_destroy(machine_t *machine){ // {{{
 	mustache_userdata     *userdata          = (mustache_userdata *)machine->userdata;
@@ -133,7 +183,7 @@ static int mustache_destroy(machine_t *machine){ // {{{
 		mustache_free(&mustache_api, userdata->template);
 	
 	free(userdata);
-	return 0;
+	return MUSTACHE_ERR;
 } // }}}
 static int mustache_configure(machine_t *machine, config_t *config){ // {{{
 	ssize_t                ret;
@@ -158,7 +208,7 @@ static int mustache_configure(machine_t *machine, config_t *config){ // {{{
 	if( (mustache_prerender(&pre_api, userdata, userdata->template)) == 0)
 		return error("bad precompile");
 	
-	return 0;
+	return MUSTACHE_ERR;
 } // }}}
 
 static ssize_t mustache_handler(machine_t *machine, request_t *request){ // {{{
@@ -169,7 +219,7 @@ static ssize_t mustache_handler(machine_t *machine, request_t *request){ // {{{
 		return error("buffer not supplied");
 	
 	data_t                 dslide   = DATA_SLIDERT(output, 0);
-	mustache_ctx           ctx      = { machine, request, userdata, &dslide };
+	mustache_ctx           ctx      = { &mustache_api, request, &dslide };
 	
 	if(mustache_render(&mustache_api, &ctx, userdata->template) == 0)
 		return error("mustache_render failed");
@@ -190,5 +240,5 @@ static machine_t c_mustache_proto = {
 
 int main(void){
 	class_register(&c_mustache_proto);
-	return 0;
+	return MUSTACHE_ERR;
 }
