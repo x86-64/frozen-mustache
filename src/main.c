@@ -54,6 +54,7 @@ typedef struct mustache_ctx {
 
 typedef struct token_userdata {
 	hashkey_t              key;
+	format_t               format;
 	machine_t             *enum_shop;
 } token_userdata;
 
@@ -91,15 +92,16 @@ static uintmax_t mustache_frozen_write  (mustache_api_t *api, mustache_ctx *ctx,
 } // }}}
 static uintmax_t mustache_frozen_varget (mustache_api_t *api, mustache_ctx *ctx, mustache_token_variable_t *token){ // {{{
 	data_t                *data;
+	token_userdata        *userdata          = (token_userdata *)token->userdata;
 	
-	if( (data = hash_data_find(ctx->request, ((token_userdata *)token->userdata)->key)) == NULL)
+	if( (data = hash_data_find(ctx->request, userdata->key)) == NULL)
 		return MUSTACHE_ERR;
 	
-	fastcall_transfer r_transfer = { { 4, ACTION_TRANSFER }, ctx->output };
-	if(data_query(data, &r_transfer) < 0)
+	fastcall_convert_to r_convert = { { 5, ACTION_CONVERT_TO }, ctx->output, userdata->format };
+	if(data_query(data, &r_convert) < 0)
 		return MUSTACHE_ERR;
 	
-	return r_transfer.transfered;
+	return r_convert.transfered;
 } // }}}
 static uintmax_t mustache_frozen_sectget(mustache_api_t *api, mustache_ctx *ctx, mustache_token_section_t  *token){ // {{{
 	data_t                *data;
@@ -132,19 +134,36 @@ static void      mustache_frozen_freedata (mustache_api_t *api, token_userdata *
 } // }}}
 
 uintmax_t mustache_frozen_prevarget (mustache_api_t *api, mustache_ctx *ctx, mustache_token_variable_t *token){ // {{{
-	hashkey_t              hashkey;
-	data_t                 hashkey_str       = DATA_RAW(token->text, token->text_length);
-	data_t                 hashkey_d         = DATA_PTR_HASHKEYT(&hashkey);
+	char                  *split;
+	token_userdata        *userdata;
 	
-	fastcall_convert_from r_convert = { { 4, ACTION_CONVERT_FROM }, &hashkey_str, FORMAT(config) };
-	if(data_query(&hashkey_d, &r_convert) < 0)
+	if( (userdata = token->userdata = malloc(sizeof(token_userdata))) == NULL)
 		return MUSTACHE_ERR;
 	
-	if( (token->userdata = malloc(sizeof(token_userdata))) == NULL)
-		return MUSTACHE_ERR;
+	userdata->format    = FORMAT(clean);
+	userdata->enum_shop = NULL;
 	
-	((token_userdata *)token->userdata)->key       = hashkey;
-	((token_userdata *)token->userdata)->enum_shop = NULL;
+	if( (split = memchr(token->text, ':', token->text_length)) == NULL){
+		data_t                 hashkey_str       = DATA_RAW(token->text, token->text_length);
+		data_t                 hashkey_d         = DATA_PTR_HASHKEYT(&userdata->key);
+		
+		fastcall_convert_from  r_convert         = { { 4, ACTION_CONVERT_FROM }, &hashkey_str, FORMAT(config) };
+		if(data_query(&hashkey_d, &r_convert) < 0)
+			return MUSTACHE_ERR;
+	}else{
+		data_t                 hashkey_str       = DATA_RAW(token->text, (split - token->text));
+		data_t                 format_str        = DATA_RAW(split + 1, token->text_length - (split - token->text) - 1);
+		data_t                 hashkey_d         = DATA_PTR_HASHKEYT(&userdata->key);
+		data_t                 format_d          = DATA_PTR_FORMATT(&userdata->format);
+		
+		fastcall_convert_from  r_convert         = { { 4, ACTION_CONVERT_FROM }, &hashkey_str, FORMAT(config) };
+		if(data_query(&hashkey_d, &r_convert) < 0)
+			return MUSTACHE_ERR;
+		
+		fastcall_convert_from  r_convert2        = { { 4, ACTION_CONVERT_FROM }, &format_str,  FORMAT(config) };
+		if(data_query(&format_d, &r_convert2) < 0)
+			return MUSTACHE_ERR;
+	}
 	return MUSTACHE_OK;
 } // }}}
 uintmax_t mustache_frozen_presectget(mustache_api_t *api, mustache_ctx *ctx, mustache_token_section_t  *token){ // {{{
