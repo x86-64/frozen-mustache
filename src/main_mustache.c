@@ -1,6 +1,7 @@
 #include <libfrozen.h>
 #include <mustache.h>
 
+#include <errors_list.c>
 /**
  * @ingroup machine
  * @addtogroup mod_machine_mustache module/mustache
@@ -27,8 +28,6 @@
  * }
  * @endcode
  */
-
-#define EMODULE 103
 
 #define HK_VALUE_template 21633 // TODO replace this with HDK
 #define MUSTACHE_ERR 0
@@ -282,6 +281,7 @@ static machine_t c_mustache_sect_proto = {
 };
 
 int main(void){
+	errors_register(&errs_list, &emodule);
 	class_register(&c_mustache_proto);
 	return MUSTACHE_ERR;
 }
