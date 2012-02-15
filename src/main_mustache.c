@@ -116,7 +116,8 @@ static uintmax_t mustache_frozen_sectget(mustache_api_t *api, mustache_ctx *ctx,
 	ctx->section                    = token->section;
 	token_data->enum_shop->userdata = ctx;
 	
-	fastcall_enum r_enum = { { 4, ACTION_ENUM }, token_data->enum_shop };
+	data_t        d_shop = DATA_MACHINET(token_data->enum_shop);
+	fastcall_enum r_enum = { { 4, ACTION_ENUM }, &d_shop };
 	if(data_query(data, &r_enum) < 0)
 		return MUSTACHE_ERR;
 	
@@ -281,7 +282,7 @@ static machine_t c_mustache_sect_proto = {
 };
 
 int main(void){
-	errors_register(&errs_list, &emodule);
+	errors_register((err_item *)&errs_list, &emodule);
 	class_register(&c_mustache_proto);
 	return MUSTACHE_ERR;
 }
