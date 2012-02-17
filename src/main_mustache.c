@@ -62,6 +62,9 @@ static machine_t c_mustache_sect_proto;
 static ssize_t mustache_frozen_sect_handler(machine_t *machine, request_t *request){ // {{{
 	mustache_ctx          *ctx               = (mustache_ctx *)machine->userdata;
 	
+	if(hash_data_find(request, HK(data)) == NULL) // EOF
+		return 0;
+
 	request_t r_next[] = {
 		hash_inline(request),
 		hash_inline(ctx->request),
