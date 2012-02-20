@@ -206,7 +206,7 @@ mustache_api_t mustache_api = {
 	.freedata = (mustache_api_freedata)&mustache_frozen_freedata
 };
 
-static int mustache_init(machine_t *machine){ // {{{
+static ssize_t mustache_init(machine_t *machine){ // {{{
 	mustache_userdata         *userdata;
 
 	if((userdata = machine->userdata = calloc(1, sizeof(mustache_userdata))) == NULL)
@@ -215,7 +215,7 @@ static int mustache_init(machine_t *machine){ // {{{
 	userdata->output = HK(output);
 	return MUSTACHE_ERR;
 } // }}}
-static int mustache_destroy(machine_t *machine){ // {{{
+static ssize_t mustache_destroy(machine_t *machine){ // {{{
 	mustache_userdata     *userdata          = (mustache_userdata *)machine->userdata;
 	
 	if(userdata->template)
@@ -224,7 +224,7 @@ static int mustache_destroy(machine_t *machine){ // {{{
 	free(userdata);
 	return MUSTACHE_ERR;
 } // }}}
-static int mustache_configure(machine_t *machine, config_t *config){ // {{{
+static ssize_t mustache_configure(machine_t *machine, config_t *config){ // {{{
 	ssize_t                ret;
 	data_t                *tpl_data;
 	mustache_userdata     *userdata          = (mustache_userdata *)machine->userdata;
