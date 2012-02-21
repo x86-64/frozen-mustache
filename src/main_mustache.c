@@ -80,14 +80,14 @@ static ssize_t mustache_frozen_sect_handler(machine_t *machine, request_t *reque
 
 static uintmax_t mustache_frozen_read   (mustache_api_t *api, mustache_userdata *userdata, char *buffer, uintmax_t buffer_size){ // {{{
 	fastcall_read r_read = { { 5, ACTION_READ }, 0, buffer, buffer_size };
-	if( data_query(userdata->tpl_data, &r_read) < 0 )
+	if( data_query(userdata->tpl_data, &r_read) < -1 )
 		return MUSTACHE_ERR;
 	
 	return r_read.buffer_size;
 } // }}}
 static uintmax_t mustache_frozen_write  (mustache_api_t *api, mustache_ctx *ctx, char *buffer, uintmax_t buffer_size){ // {{{
 	fastcall_write r_write = { { 5, ACTION_WRITE }, 0, buffer, buffer_size };
-	if( data_query(ctx->output, &r_write) < 0 )
+	if( data_query(ctx->output, &r_write) < -1 )
 		return MUSTACHE_ERR;
 	
 	return r_write.buffer_size;
@@ -103,7 +103,7 @@ static uintmax_t mustache_frozen_varget (mustache_api_t *api, mustache_ctx *ctx,
 	if(data_query(data, &r_convert) < 0)
 		return MUSTACHE_ERR;
 	
-	return r_convert.transfered;
+	return 1; //r_convert.transfered;
 } // }}}
 static uintmax_t mustache_frozen_sectget(mustache_api_t *api, mustache_ctx *ctx, mustache_token_section_t  *token){ // {{{
 	data_t                *data;
