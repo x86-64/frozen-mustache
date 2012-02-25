@@ -143,7 +143,7 @@ uintmax_t mustache_frozen_prevarget (mustache_api_t *api, mustache_ctx *ctx, mus
 	if( (userdata = token->userdata = malloc(sizeof(token_userdata))) == NULL)
 		return MUSTACHE_ERR;
 	
-	userdata->format    = FORMAT(clean);
+	userdata->format    = FORMAT(native);
 	userdata->enum_shop = NULL;
 	
 	if( (split = memchr(token->text, ':', token->text_length)) == NULL){
