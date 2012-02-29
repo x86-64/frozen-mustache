@@ -29,7 +29,6 @@
  * @endcode
  */
 
-#define HK_VALUE_template 21633 // TODO replace this with HDK
 #define MUSTACHE_ERR 0
 #define MUSTACHE_OK  1
 #define ITER_OK 0
@@ -212,7 +211,7 @@ static ssize_t mustache_init(machine_t *machine){ // {{{
 	if((userdata = machine->userdata = calloc(1, sizeof(mustache_userdata))) == NULL)
 		return error("calloc failed");
 	
-	userdata->output = HK(output);
+	userdata->output = HDK(output);
 	return MUSTACHE_ERR;
 } // }}}
 static ssize_t mustache_destroy(machine_t *machine){ // {{{
@@ -229,9 +228,9 @@ static ssize_t mustache_configure(machine_t *machine, config_t *config){ // {{{
 	data_t                *tpl_data;
 	mustache_userdata     *userdata          = (mustache_userdata *)machine->userdata;
 	
-	hash_data_get(ret, TYPE_HASHKEYT, userdata->output, config, HK(output));
+	hash_data_get(ret, TYPE_HASHKEYT, userdata->output, config, HDK(output));
 	
-	if( (tpl_data = hash_data_find(config, HK(template))) == NULL)
+	if( (tpl_data = hash_data_find(config, HDK(template))) == NULL)
 		return -EINVAL;
 	
 	data_t dslide = DATA_SLIDERT(tpl_data, 0);
