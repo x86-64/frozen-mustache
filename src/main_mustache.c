@@ -212,7 +212,7 @@ static ssize_t mustache_init(machine_t *machine){ // {{{
 		return error("calloc failed");
 	
 	userdata->output = HDK(output);
-	return MUSTACHE_ERR;
+	return 0;
 } // }}}
 static ssize_t mustache_destroy(machine_t *machine){ // {{{
 	mustache_userdata     *userdata          = (mustache_userdata *)machine->userdata;
@@ -221,7 +221,7 @@ static ssize_t mustache_destroy(machine_t *machine){ // {{{
 		mustache_free(&mustache_api, userdata->template);
 	
 	free(userdata);
-	return MUSTACHE_ERR;
+	return 0;
 } // }}}
 static ssize_t mustache_configure(machine_t *machine, config_t *config){ // {{{
 	ssize_t                ret;
@@ -246,7 +246,7 @@ static ssize_t mustache_configure(machine_t *machine, config_t *config){ // {{{
 	if( (mustache_prerender(&pre_api, userdata, userdata->template)) == 0)
 		return error("bad precompile");
 	
-	return MUSTACHE_ERR;
+	return 0;
 } // }}}
 
 static ssize_t mustache_handler(machine_t *machine, request_t *request){ // {{{
@@ -286,5 +286,5 @@ static machine_t c_mustache_sect_proto = {
 int main(void){
 	errors_register((err_item *)&errs_list, &emodule);
 	class_register(&c_mustache_proto);
-	return MUSTACHE_ERR;
+	return 0;
 }
