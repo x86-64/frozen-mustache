@@ -233,7 +233,7 @@ static ssize_t mustache_configure(machine_t *machine, config_t *config){ // {{{
 	if( (tpl_data = hash_data_find(config, HDK(template))) == NULL)
 		return -EINVAL;
 	
-	data_t dslide = DATA_SLIDERT(tpl_data, 0);
+	data_t dslide = DATA_AUTO_SLIDERT(tpl_data, 0);
 	userdata->tpl_data = &dslide;
 	
 	if( (userdata->template = mustache_compile(&mustache_api, userdata)) == NULL)
@@ -256,7 +256,7 @@ static ssize_t mustache_handler(machine_t *machine, request_t *request){ // {{{
 	if( (output = hash_data_find(request, userdata->output)) == NULL)
 		return error("buffer not supplied");
 	
-	data_t                 dslide   = DATA_SLIDERT(output, 0);
+	data_t                 dslide   = DATA_AUTO_SLIDERT(output, 0);
 	mustache_ctx           ctx      = { &mustache_api, request, &dslide };
 	
 	if(mustache_render(&mustache_api, &ctx, userdata->template) == 0)
