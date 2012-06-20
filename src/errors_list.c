@@ -1,11 +1,11 @@
 
 static err_item errs_list[] = {
- { -264, "src/main_mustache.c: mustache_render failed" },
- { -258, "src/main_mustache.c: buffer not supplied" },
- { -248, "src/main_mustache.c: bad precompile" },
- { -241, "src/main_mustache.c: bad template" },
- { -213, "src/main_mustache.c: calloc failed" },
- { -76, "src/main_mustache.c: mustache section render failed" },
+ { -263, "src/main_mustache.c: mustache_render failed" },
+ { -257, "src/main_mustache.c: buffer not supplied" },
+ { -247, "src/main_mustache.c: bad precompile" },
+ { -240, "src/main_mustache.c: bad template" },
+ { -212, "src/main_mustache.c: calloc failed" },
+ { -75, "src/main_mustache.c: mustache section render failed" },
 
 	{ 0, NULL }
 };
